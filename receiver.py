@@ -1,48 +1,46 @@
 import bluetooth
-import time
+import webbrowser
 
-PORT = 5  # ネット記事だとPORT=1と記述していることが多いですが、OSErrorが出ます！
+# Chromeのパスを指定
+CHROME_PATH = '"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" %s'
 
+def start_bluetooth_server():
+    # Bluetoothサーバーのセットアップ
+    server_socket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+    server_socket.bind(("", bluetooth.PORT_ANY))
+    server_socket.listen(1)
 
-def main():
-    global PORT
+    port = server_socket.getsockname()[1]
 
-    server = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-    server.bind(('', PORT))
-    server.listen(1)
+    # サーバーを知らせるためにサービスの登録
+    bluetooth.advertise_service(server_socket, "BluetoothServer", 
+                                service_id="00001101-0000-1000-8000-00805F9B34FB",
+                                service_classes=["00001101-0000-1000-8000-00805F9B34FB", bluetooth.SERIAL_PORT_CLASS],
+                                profiles=[bluetooth.SERIAL_PORT_PROFILE])
 
-    uuid = "00001101-0000-1000-8000-00805F9B34FB"
-    bluetooth.advertise_service(
-        server,
-        "SampleServer",
-        service_id=uuid,
-        service_classes=[uuid, bluetooth.SERIAL_PORT_CLASS],
-        profiles=[bluetooth.SERIAL_PORT_PROFILE]
-    )
+    print(f"Waiting for connection on RFCOMM channel {port}")
 
-    print("Waiting for connection on RFCOMM channel", PORT)
-    sock, addr = server.accept()
-    print(f'Accepted connection from {addr}')
+    client_socket, client_info = server_socket.accept()
+    print(f"Accepted connection from {client_info}")
 
+    # データの受信と処理
     try:
         while True:
-            print("Waiting for data...")
-            data = sock.recv(1024)
+            data = client_socket.recv(1024)
             if not data:
-                print("No data received, closing connection...")
                 break
-            print(f'Received: {data}')
-            # 動作確認用に定期的にメッセージを表示
-            time.sleep(1)  # 1秒待機
-    except Exception as e:
-        print(f"An error occurred: {e}")
-    finally:
-        sock.close()
-        server.close()
-        print("Server closed")
+            url = data.decode('utf-8')
+            print(f"Received URL: {url}")
+            webbrowser.get(CHROME_PATH).open(url)
+            break  # URLを受け取って開いたらループを抜ける
 
+    except OSError:
+        pass
 
-if __name__ == '__main__':
-    print("Starting Bluetooth server...")
-    main()
-    print("Bluetooth server stopped.")
+    print("Disconnected.")
+
+    client_socket.close()
+    server_socket.close()
+
+if __name__ == "__main__":
+    start_bluetooth_server()
